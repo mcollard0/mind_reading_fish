@@ -42,7 +42,53 @@ function install_component
     set -l missing 0
     if not type -q ollama; and not pgrep -f "Gerbil" > /dev/null
         echo (set_color red)"Error: Neither Ollama nor Gerbil detected."(set_color normal)
-        set missing 1
+        
+        set -l install_cmd ""
+        if type -q pacman
+            set install_cmd "sudo pacman -S --noconfirm ollama"
+        else if type -q apt
+            set install_cmd "curl -fsSL https://ollama.com/install.sh | sh"
+        else if type -q dnf
+             set install_cmd "sudo dnf install ollama"
+        else
+            set install_cmd "curl -fsSL https://ollama.com/install.sh | sh"
+        end
+
+        echo (set_color yellow)"I can install it for you using:"(set_color normal)
+        echo (set_color cyan)"$install_cmd"(set_color normal)
+        echo (set_color cyan)"sudo systemctl enable --now ollama.service"(set_color normal)
+        echo (set_color cyan)"ollama pull deepseek-coder-v2:lite"(set_color normal)
+
+        read -P "Install? [Y/n] " -l confirm
+        
+        # Default to Yes if empty, or starts with y/Y/j/J
+        if test -z "$confirm"; or string match -qi "y*" "$confirm"; or string match -qi "j*" "$confirm"
+            echo (set_color green)"Installing..."(set_color normal)
+            eval $install_cmd
+            if test $status -ne 0
+                echo (set_color red)"Installation failed."(set_color normal)
+                set missing 1
+            else
+                # Enable and wait for service to be ready
+                if sudo systemctl enable --now ollama.service
+                    echo (set_color green)"Service enabled. Waiting for startup..."(set_color normal)
+                    sleep 5
+                    
+                    if ollama pull deepseek-coder-v2:lite
+                        echo (set_color green)"Model pulled successfully."(set_color normal)
+                    else
+                         echo (set_color red)"Model pull failed. Try running 'ollama pull deepseek-coder-v2:lite' manually."(set_color normal)
+                         set missing 1
+                    end
+                else
+                    echo (set_color red)"Service enablement failed."(set_color normal)
+                    set missing 1
+                end
+            end
+        else
+             echo (set_color red)"Installation aborted by user."(set_color normal)
+             set missing 1
+        end
     end
 
     if not type -q jq
