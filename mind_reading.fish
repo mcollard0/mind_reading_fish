@@ -31,7 +31,7 @@ echo (set_color green)"Verification successful. Appending $FUNCTION_NAME to $CON
 set PAYLOAD "
 # --- START MIND READING FISH ---
 function $FUNCTION_NAME
-    set -l failed_cmd \$argv[1]
+    set -l failed_cmd (string join ' ' \$argv)
     
     # VRAM Safety: Check for Gerbil before firing up Ollama
     if ss -tuln | grep -q \":5001 \"; or pgrep -f \"Gerbil\" > /dev/null
@@ -40,12 +40,32 @@ function $FUNCTION_NAME
 
     echo (set_color cyan)\"Mind-reading in progress for '\$failed_cmd'...\"(set_color normal)
 
-    # Agentic Prompt for DeepSeek Coder V2 Lite
-    set -l ai_output (curl -s http://localhost:11434/api/generate -d '{
+    # Build the JSON request
+    set -l json_request '{
         \"model\": \"deepseek-coder-v2:lite\",
-        \"prompt\": \"Role: Expert CachyOS Sysadmin. User tried: \\'\"\$argv\"\\'. Task: Fix it. Rules: 1. Executable commands only. 2. Chain with && \\\\ one per line. 3. Prefix explanations with #. 4. If destructive (rm -rf, dd, mkfs), start with: # WARNING: DESTRUCTIVE.\",
+        \"prompt\": \"You are a shell command generator. User input: \\\"'\"\$failed_cmd\"'\\\". Output ONLY the corrected shell command(s) that accomplish their intent. Rules: 1. No explanations, no markdown, no code blocks. 2. One command per line or chain with &&. 3. If you must explain, prefix line with #. 4. If destructive (rm -rf, dd, mkfs), start with: # WARNING: DESTRUCTIVE\",
         \"stream\": false
-    }' | jq -r '.response' | string trim)
+    }'
+    
+    if set -q _mind_reading_fish_debug
+        echo (set_color magenta)\"DEBUG: Request:\"(set_color normal)
+        echo \"\$json_request\"
+    end
+    
+    # Agentic Prompt for DeepSeek Coder V2 Lite
+    set -l raw_response (curl -s http://localhost:11434/api/generate -d \"\$json_request\")
+    
+    if set -q _mind_reading_fish_debug
+        echo (set_color magenta)\"DEBUG: Raw response:\"(set_color normal)
+        echo \"\$raw_response\"
+    end
+    
+    set -l ai_output (echo \"\$raw_response\" | jq -r '.response' | string trim)
+    
+    if set -q _mind_reading_fish_debug
+        echo (set_color magenta)\"DEBUG: Extracted response:\"(set_color normal)
+        echo \"\$ai_output\"
+    end
 
     echo -e \"\\n\"(set_color yellow)\"--- PROPOSED EXECUTION ---\"(set_color normal)
     echo \"\$ai_output\"
@@ -62,10 +82,18 @@ function $FUNCTION_NAME
 
     sleep \$sleep_time
     
-    set -l clean_cmd (echo \"\$ai_output\" | grep -v '^#' | string collect)
+    # Extract only executable commands (remove markdown, comments, empty lines)
+    set -l clean_cmd (echo \"\$ai_output\" | sed '/^```/d' | grep -v '^#' | grep -v '^[[:space:]]*\$' | string collect | string trim)
+    
     if test -n \"\$clean_cmd\"
         eval \"\$clean_cmd\"
+    else
+        echo (set_color red)\"Error: No executable command extracted from AI response.\"(set_color normal)
+        return 1
     end
+    
+    # Return 0 to indicate we handled the command
+    return 0
 end
 
 # Alias the handler to the standard Fish event
