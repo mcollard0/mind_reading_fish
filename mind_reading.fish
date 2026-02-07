@@ -2,34 +2,68 @@
 
 set CONFIG_FILE "$HOME/.config/fish/config.fish"
 set FUNCTION_NAME "mind_reading_fish"
+set START_MARKER "# --- START MIND READING FISH ---"
+set END_MARKER "# --- END MIND READING FISH ---"
 
-echo (set_color cyan)"[ Pre-flight Check ]"(set_color normal)
-
-# 1. Dependency Verification
-set -l missing 0
-if not type -q ollama; and not pgrep -f "Gerbil" > /dev/null
-    echo (set_color red)"Error: Neither Ollama nor Gerbil detected."(set_color normal)
-    set missing 1
+function status_component
+    if grep -Fq "$START_MARKER" "$CONFIG_FILE"
+        echo (set_color green)"[INSTALLED]"(set_color normal)" Mind Reading Fish is currently active in $CONFIG_FILE"
+        return 0
+    else
+        echo (set_color yellow)"[NOT INSTALLED]"(set_color normal)" Mind Reading Fish is NOT found in $CONFIG_FILE"
+        return 1
+    end
 end
 
-if not type -q jq
-    echo (set_color red)"Error: 'jq' is required."(set_color normal)
-    set missing 1
+function uninstall_component
+    if not grep -Fq "$START_MARKER" "$CONFIG_FILE"
+        echo (set_color yellow)"Not installed. Nothing to remove."(set_color normal)
+        return 0
+    end
+
+    echo (set_color cyan)"Uninstalling Mind Reading Fish..."(set_color normal)
+    # Use sed to delete the block from start marker to end marker
+    # We use a temporary file to ensure safety
+    sed -i "/$START_MARKER/,/$END_MARKER/d" "$CONFIG_FILE"
+    
+    if grep -Fq "$START_MARKER" "$CONFIG_FILE"
+        echo (set_color red)"Error: Uninstall failed. Markers still found."(set_color normal)
+        return 1
+    else
+        echo (set_color green)"Successfully uninstalled."(set_color normal)
+        return 0
+    end
 end
 
-if test $missing -eq 1; exit 1; end
+function install_component
+    echo (set_color cyan)"[ Pre-flight Check ]"(set_color normal)
 
-# 2. Existing Config Test (prevents double install)
-if grep -q "function $FUNCTION_NAME" "$CONFIG_FILE"
-    echo (set_color red)"Error: '$FUNCTION_NAME' already exists in $CONFIG_FILE."(set_color normal)
-    exit 1
-end
+    # 1. Dependency Verification
+    set -l missing 0
+    if not type -q ollama; and not pgrep -f "Gerbil" > /dev/null
+        echo (set_color red)"Error: Neither Ollama nor Gerbil detected."(set_color normal)
+        set missing 1
+    end
 
-echo (set_color green)"Verification successful. Appending $FUNCTION_NAME to $CONFIG_FILE..."(set_color normal)
+    if not type -q jq
+        echo (set_color red)"Error: 'jq' is required."(set_color normal)
+        set missing 1
+    end
 
-# 3. The Payload
-set PAYLOAD "
-# --- START MIND READING FISH ---
+    if test $missing -eq 1; exit 1; end
+
+    # 2. Existing Config Test (prevents double install)
+    if grep -Fq "$START_MARKER" "$CONFIG_FILE"
+        echo (set_color yellow)"Already installed. Use --reinstall to force update."(set_color normal)
+        return 0
+    end
+
+    echo (set_color green)"Verification successful. Appending $FUNCTION_NAME to $CONFIG_FILE..."(set_color normal)
+
+    # 3. The Payload
+    # We escape the payload carefully to ensure it's written correctly
+    set PAYLOAD "
+$START_MARKER
 function $FUNCTION_NAME
     set -l failed_cmd (string join ' ' \$argv)
     
@@ -98,8 +132,31 @@ end
 
 # Alias the handler to the standard Fish event
 alias fish_command_not_found='$FUNCTION_NAME'
-# --- END MIND READING FISH ---
+$END_MARKER
 "
 
-echo "$PAYLOAD" >> "$CONFIG_FILE"
-echo (set_color green)"Done! Restart your shell or 'source $CONFIG_FILE' to see if I can read your mind."(set_color normal)
+    echo "$PAYLOAD" >> "$CONFIG_FILE"
+    echo (set_color green)"Done! Restart your shell or 'source $CONFIG_FILE' to see if I can read your mind."(set_color normal)
+end
+
+# Main Argument Parsing
+if test (count $argv) -eq 0
+    # Default behavior: Install
+    install_component
+else
+    switch $argv[1]
+        case --install
+            install_component
+        case --uninstall
+            uninstall_component
+        case --reinstall
+            uninstall_component
+            install_component
+        case --status
+            status_component
+        case '*'
+            echo "Usage: ./mind_reading.fish [--install | --uninstall | --reinstall | --status]"
+            echo "Default is --install if no argument provided."
+            exit 1
+    end
+end

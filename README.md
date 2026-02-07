@@ -31,7 +31,7 @@ Automatically fixes failed shell commands using AI. When you mistype a command i
    - Checks that function isn't already installed
 
 2. **Function injection:**
-   - Appends `mind_reading_fish` function to Fish config
+   - Appends `mind_reading_fish` function to Fish config within safety markers
    - Aliases it to `fish_command_not_found` event
 
 ### Runtime Operation
@@ -59,25 +59,46 @@ Automatically fixes failed shell commands using AI. When you mistype a command i
 
 ## Usage
 
+### Management Commands
+Directly manage the installation from the script itself.
+
 ```fish
-# Install
-fish mind_reading.fish
+# Check status (default is Not Installed)
+./mind_reading.fish --status
 
-# Restart shell or reload config
-source ~/.config/fish/config.fish
+# Install the mind-reading function
+./mind_reading.fish --install
 
+# Uninstall/Remove the function from config
+./mind_reading.fish --uninstall
+
+# Reinstall/Update (performs uninstall -> install)
+./mind_reading.fish --reinstall
+```
+
+### In Action
+Once installed, simply mistype a command to trigger the mind reading:
+
+```fish
 # Try a typo
 sudo pcaman -Syu
-# Mind-reading in progress for 'pcaman'...
-# (AI suggests correct command and executes after 3 seconds)
+
+# Output:
+# Mind-reading in progress for 'sudo pcaman -Syu'...
+#
+# --- PROPOSED EXECUTION ---
+# sudo pacman -Syu
+# ---------------------------
+# Auto-executing in 3 seconds... (Ctrl+C to abort)
 ```
 
 ## Safety Features
-- **VRAM conflict avoidance** - Disables when Gerbil is running
-- **Destructive command detection** - Infinite delay for dangerous operations
-- **Manual abort** - Ctrl+C cancels execution
-- **Comment filtering** - Only executes actual commands, not explanations
-- **Prompt engineering** - AI instructed to mark destructive commands explicitly
+- **Marked Injection** - Uses start/end markers in `config.fish` for safe removal.
+- **VRAM conflict avoidance** - Disables when Gerbil is running.
+- **Destructive command detection** - Infinite delay for dangerous operations.
+- **Manual abort** - Ctrl+C cancels execution.
+- **Comment filtering** - Only executes actual commands, not explanations.
+- **Prompt engineering** - AI instructed to mark destructive commands explicitly.
 
 ## Technical Details
 
